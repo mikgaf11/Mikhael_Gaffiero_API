@@ -1,8 +1,23 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from app.database import db
-from app.models import PlayerScore
+from fastapi import FastAPI, File, UploadFile
+from pydantic import BaseModel
+import motor.motor_asyncio
+import os
+from dotenv import load_dotenv
+
+# Load .env variables
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI")
 
 app = FastAPI()
+
+# Connect to MongoDB
+client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
+db = client["multimedia_db"]
+
+# Pydantic model for scores
+class PlayerScore(BaseModel):
+    player_name: str
+    score: int
 
 # --- Upload Sprite ---
 @app.post("/upload_sprite")
@@ -26,8 +41,9 @@ async def upload_audio(file: UploadFile = File(...)):
     result = await db.audio.insert_one(audio_doc)
     return {"message": "Audio uploaded", "id": str(result.inserted_id)}
 
-# --- Add Player Score ---
+# --- Add Score ---
 @app.post("/player_score")
 async def add_score(score: PlayerScore):
-    result = await db.scores.insert_one(score.dict())
+    score_doc = score.dict()
+    result = await db.scores.insert_one(score_doc)
     return {"message": "Score recorded", "id": str(result.inserted_id)}
