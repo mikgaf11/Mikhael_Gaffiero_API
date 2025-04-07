@@ -1,5 +1,6 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from pydantic import BaseModel
+from fastapi import status
 import motor.motor_asyncio
 import os
 from dotenv import load_dotenv
@@ -22,13 +23,20 @@ class PlayerScore(BaseModel):
 # --- Upload Sprite ---
 @app.post("/upload_sprite")
 async def upload_sprite(file: UploadFile = File(...)):
+    allowed_extensions = [".png", ".jpg", ".jpeg"]
+
+    filename = file.filename.lower()
+    if not any(filename.endswith(ext) for ext in allowed_extensions):
+        raise HTTPException(status_code=400, detail="Invalid file type. Only .png, .jpg, .jpeg allowed.")
+
     content = await file.read()
     sprite_doc = {
-        "filename": file.filename,
+        "filename": filename,
         "content": content
     }
     result = await db.sprites.insert_one(sprite_doc)
     return {"message": "Sprite uploaded", "id": str(result.inserted_id)}
+
 
 # --- Upload Audio ---
 @app.post("/upload_audio")
@@ -44,6 +52,8 @@ async def upload_audio(file: UploadFile = File(...)):
 # --- Add Score ---
 @app.post("/player_score")
 async def add_score(score: PlayerScore):
-    score_doc = score.dict()
-    result = await db.scores.insert_one(score_doc)
+    if score.score < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Score must be positive.")
+    result = await db.scores.insert_one(score.dict())
     return {"message": "Score recorded", "id": str(result.inserted_id)}
+
